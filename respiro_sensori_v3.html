@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Respiro guidato con sensori</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600&family=Instrument+Serif&display=swap" rel="stylesheet">
+<style>
+/* Layout: colonna stretta per il telefono. Cerchio e comandi in alto, poi sensori, ritmo, suono, durata e registro. Tema scuro di partenza. */
+:root {
+  --bg: #0d1214; --surface: #151c1f; --line: #26323a; --fg: #dde4e1; --muted: #8d9da0;
+  --in: #6fb7b2; --out: #d9a768; --warn: #e08a78; --on-out: #1a1308; --focus: #f0d9b0;
+  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-body: "Albert Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) { --bg: #f3f5f2; --surface: #e8ece8; --line: #cdd6d2; --fg: #1b2528; --muted: #55666a;
+    --in: #2c7a76; --out: #a8631a; --warn: #b3412f; --on-out: #fffaf2; --focus: #7a4a10; color-scheme: light; }
+}
+:root[data-theme="light"] { --bg: #f3f5f2; --surface: #e8ece8; --line: #cdd6d2; --fg: #1b2528; --muted: #55666a;
+  --in: #2c7a76; --out: #a8631a; --warn: #b3412f; --on-out: #fffaf2; --focus: #7a4a10; color-scheme: light; }
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.45;
+  padding-block: 20px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+[hidden] { display: none !important; }
+.wrap { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+h1 { font-family: var(--font-display); font-weight: 400; font-size: 30px; line-height: 1.1; margin: 0; }
+.top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.top p { margin: 0; color: var(--muted); font-size: 14px; }
+.stage-box { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.stage { position: relative; width: min(70vw, 270px); aspect-ratio: 1; max-width: 100%; --orb: var(--muted); }
+.stage[data-phase="in"] { --orb: var(--in); } .stage[data-phase="out"] { --orb: var(--out); }
+.ring { position: absolute; inset: 0; border-radius: 50%; border: 1px solid var(--line); }
+.orb { position: absolute; inset: 0; border-radius: 50%; background: var(--orb); opacity: .26; transform: scale(.72); transition: background .7s; }
+.label { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 2px; }
+.phase { font-family: var(--font-display); font-size: 38px; line-height: 1; }
+.count { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 15px; min-height: 1.4em; }
+.now { margin: 0; text-align: center; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; min-height: 2.9em; }
+.plan { margin: 0; text-align: center; font-size: 14px; color: var(--muted); }
+button { font: inherit; color: inherit; cursor: pointer; border-radius: 999px; border: 1px solid var(--line); background: transparent; padding: 10px 18px; min-height: 44px; }
+button:hover { border-color: var(--muted); }
+button:disabled { opacity: .45; cursor: default; }
+button.go { flex: 1 1 150px; min-height: 58px; font-size: 17px; font-weight: 600; background: var(--out); color: var(--on-out); border-color: var(--out); }
+button.go[data-on="1"] { background: transparent; color: var(--fg); border-color: var(--muted); }
+button.alt { flex: 1 1 150px; min-height: 58px; font-size: 17px; font-weight: 600; border-color: var(--in); color: var(--in); }
+button.alt[data-on="1"] { background: var(--in); color: var(--bg); }
+.btns { display: flex; gap: 10px; width: 100%; flex-wrap: wrap; }
+.btns button:not(.go):not(.alt) { flex: 1 1 140px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+section { border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-direction: column; gap: 14px; }
+h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+h3 { margin: 4px 0 0; font-size: 15px; font-weight: 600; }
+.sub { display: flex; flex-direction: column; gap: 12px; }
+.row { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; row-gap: 2px; align-items: baseline; }
+.row label { min-width: 0; }
+.row output { font-variant-numeric: tabular-nums; color: var(--out); font-weight: 500; text-align: right; }
+.row input[type=range] { grid-column: 1 / -1; width: 100%; height: 34px; margin: 0; accent-color: var(--out); }
+.row input:disabled { opacity: .4; }
+.hint { margin: 0; font-size: 13px; color: var(--muted); }
+.derived { margin: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+.derived b { font-weight: 500; } .derived .i { color: var(--in); } .derived .o { color: var(--out); }
+.check { display: flex; align-items: center; gap: 10px; min-height: 36px; }
+.check input { width: 20px; height: 20px; accent-color: var(--out); margin: 0; flex: none; }
+.status { margin: 0; font-size: 14px; background: var(--surface); border-radius: 10px; padding: 10px 14px; font-variant-numeric: tabular-nums; }
+.status.warn { color: var(--warn); }
+canvas { width: 100%; display: block; background: var(--surface); border-radius: 10px; }
+#wave { height: 120px; } #chart { height: 190px; }
+.summary { font-size: 14px; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.summary b { font-weight: 600; }
+ul.ev { margin: 0; padding-left: 18px; font-size: 14px; font-variant-numeric: tabular-nums; }
+select { font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-height: 44px; width: 100%; }
+#dark { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; cursor: pointer;
+  padding: 24px max(16px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+#dark span { color: #3a3a3a; font-size: 14px; text-align: center; }
+#darkHint { transition: opacity 1.5s; }
+@media (prefers-reduced-motion: reduce) { .orb, #darkHint { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><h1>Respiro guidato</h1><p>Con sensori di movimento e registro</p></div>
+
+  <div class="stage-box">
+    <div class="stage" id="stage" data-phase="idle">
+      <div class="ring"></div><div class="orb" id="orb"></div>
+      <div class="label"><div class="phase" id="phase">Pronto</div><div class="count" id="count"></div></div>
+    </div>
+    <p class="now" id="now"></p>
+    <div class="btns">
+      <button class="go" id="go" type="button" data-on="0">Avvia guida</button>
+      <button class="alt" id="logBtn" type="button" data-on="0">Registra la notte</button>
+    </div>
+    <div class="btns">
+      <button type="button" id="blackBtn">Schermo nero</button>
+      <button type="button" id="resetBtn">Valori iniziali</button>
+    </div>
+    <p class="plan" id="plan"></p>
+  </div>
+
+  <section>
+    <h2>Sensori</h2>
+    <label class="check" for="p-useSens"><input type="checkbox" id="p-useSens"> Usa i sensori di movimento con la guida</label>
+    <label class="check" for="p-follow"><input type="checkbox" id="p-follow"> Segui il mio respiro (aggancio automatico)</label>
+    <p class="hint">Appoggia il telefono sull'addome, con lo schermo verso l'alto, e resta fermo. Per i primi 100 secondi la guida va a ritmo fisso e l'app impara come ti muovi. Poi la guida si aggancia al tuo respiro e lo accompagna piano verso il ritmo finale.</p>
+    <p class="status" id="sensStatus">Sensori spenti.</p>
+    <p class="status" id="syncStatus" hidden></p>
+    <canvas id="wave" aria-label="Segnale del respiro degli ultimi 30 secondi"></canvas>
+    <p class="hint">Linea verso l'alto = pancia che sale, se la fase è calibrata. Pallini verdi: inizio inspirazione, pallini sabbia: inizio espirazione.</p>
+    <div class="sub" id="g-sens"></div>
+    <div class="btns">
+      <button type="button" id="flipBtn">Inverti fase</button>
+      <button type="button" id="recalBtn">Ricalibra</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ritmo</h2>
+    <div class="sub" id="g-final"><h3>Ritmo finale</h3></div>
+    <p class="derived" id="derFinal"></p>
+    <div class="sub" id="g-start">
+      <h3>Partenza graduale</h3>
+      <p class="hint">Senza sensori la guida parte vicino al respiro naturale e si avvicina al ritmo finale nel tempo indicato. Con l'aggancio automatico questo vale solo per i primi 100 secondi.</p>
+    </div>
+    <p class="derived" id="derStart"></p>
+  </section>
+
+  <section>
+    <h2>Suono</h2>
+    <div class="sub" id="g-sound"></div>
+    <p class="hint">Fruscio, «ooom» e livelli seguono il ciclo successivo. Il volume generale cambia subito.</p>
+  </section>
+
+  <section>
+    <h2>Durata</h2>
+    <div class="sub" id="g-time"></div>
+    <label class="check" for="p-endless"><input type="checkbox" id="p-endless"> Senza fine (si ferma con il pulsante)</label>
+    <label class="check" for="p-wake"><input type="checkbox" id="p-wake"> Tieni lo schermo acceso</label>
+    <p class="hint">Quando la guida finisce, il registro continua fino a «Ferma registro». Per la notte lascia il telefono in carica e usa «Schermo nero»: lo schermo resta acceso ma buio, così i sensori continuano a funzionare.</p>
+  </section>
+
+  <section>
+    <h2>Registro</h2>
+    <select id="sessSel" aria-label="Sessione da mostrare"></select>
+    <div class="summary" id="summary"></div>
+    <canvas id="chart" aria-label="Ritmo respiratorio minuto per minuto"></canvas>
+    <p class="hint" id="chartHint"></p>
+    <h3>Pause rilevate</h3>
+    <ul class="ev" id="evList"></ul>
+    <div class="btns">
+      <button type="button" id="csvBtn">Scarica CSV</button>
+      <button type="button" id="copyBtn">Copia CSV</button>
+      <button type="button" id="delBtn">Cancella registro</button>
+    </div>
+    <p class="hint" id="csvMsg"></p>
+    <p class="hint">Tutto resta sul telefono, in questa pagina. Le pause e il ritmo sono stime dal movimento dell'addome: servono a vedere tendenze e confrontare le notti, non a fare una diagnosi.</p>
+  </section>
+</div>
+
+<div id="dark" hidden role="button" aria-label="Tocca per riaccendere lo schermo">
+  <span id="darkInfo"></span><span id="darkHint">Tocca per tornare ai comandi</span>
+</div>
+
+<script>
+/* Analisi del respiro da accelerometro. Funzioni pure, senza DOM, provabili in Node. */
+(function (root) {
+  'use strict';
+  var FS = 20, DT = 1 / FS;
+  function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+  function median(a) {
+    if (!a.length) return NaN;
+    var b = a.slice().sort(function (x, y) { return x - y; }), m = b.length >> 1;
+    return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2;
+  }
+  function sm(x) { x = clamp(x, 0, 1); return 0.5 - 0.5 * Math.cos(Math.PI * x); }
+
+  var DEF = { minThr: 0.05, movThr: 0.10, pauseMin: 6, pauseOpen: 6, warm: 15 };
+
+  function Tracker(opts) {
+    this.o = {};
+    for (var k in DEF) this.o[k] = opts && opts[k] != null ? opts[k] : DEF[k];
+    this.onCycle = null; this.onEvent = null;
+    this.reset();
+  }
+
+  Tracker.prototype.reset = function () {
+    this.binIdx = null; this.acc = [0, 0, 0, 0];
+    this.init = false; this.scale = null; this.prevA = null; this.mot = 0;
+    this.hp = [0, 0, 0]; this.xprev = [0, 0, 0]; this.l1 = [0, 0, 0]; this.l2 = [0, 0, 0];
+    this.buf = []; this.sh = [];
+    this.d = [1, 0, 0]; this.dReady = false; this.lastPCA = -1e9; this.frac = 0;
+    this.sign = 1;
+    this.moving = false; this.movingUntil = 0; this.movT0 = null; this.lastAbove = 0;
+    this.t0 = null; this.t = 0;
+    this._resetDet();
+    this.cycles = []; this.A = 0; this.pauseOpen = null;
+  };
+
+  Tracker.prototype._resetDet = function () {
+    this.det = { mode: null, maxv: 0, maxt: 0, minv: 0, mint: 0 };
+    this.ext = []; this.lastExt = null; this.skipFirst = true;
+  };
+
+  Tracker.prototype.setSign = function (sg) {
+    if (sg === this.sign) return;
+    this.sign = sg; this._resetDet(); this.cycles = []; this.A = 0; this.pauseOpen = null;
+  };
+
+  /* Ingresso: campioni grezzi a qualsiasi frequenza, mediati a 20 Hz. */
+  Tracker.prototype.push = function (t, ax, ay, az) {
+    var bin = Math.floor(t * FS);
+    if (this.binIdx === null) this.binIdx = bin;
+    if (bin !== this.binIdx) {
+      if (this.acc[3] > 0) {
+        var n = this.acc[3];
+        this._step((this.binIdx + 1) * DT, [this.acc[0] / n, this.acc[1] / n, this.acc[2] / n], bin - this.binIdx);
+      }
+      this.acc = [0, 0, 0, 0]; this.binIdx = bin;
+    }
+    this.acc[0] += ax; this.acc[1] += ay; this.acc[2] += az; this.acc[3]++;
+  };
+
+  Tracker.prototype._step = function (t, a, gapBins) {
+    if (this.t0 == null) this.t0 = t;
+    this.t = t;
+    if (this.scale == null) {
+      var n0 = Math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+      if (n0 < 0.5) return;
+      this.scale = n0 < 3 ? 9.80665 : 1;
+    }
+    a = [a[0] * this.scale, a[1] * this.scale, a[2] * this.scale];
+    var i;
+    if (!this.init) { this.xprev = a.slice(); this.prevA = a.slice(); this.init = true; }
+    if (gapBins > 20) { this.movingUntil = t + 5; this._resetDet(); this.pauseOpen = null; }
+    var m = Math.sqrt(Math.pow(a[0] - this.prevA[0], 2) + Math.pow(a[1] - this.prevA[1], 2) + Math.pow(a[2] - this.prevA[2], 2));
+    this.mot = this.mot * 0.9 + m * 0.1;
+    this.prevA = a;
+    if (this.mot > this.o.movThr) { this.movingUntil = t + 5; this.lastAbove = t; }
+    var was = this.moving;
+    this.moving = t < this.movingUntil;
+    if (this.moving && !was) {
+      this.movT0 = t;
+      if (this.pauseOpen) this._closePause(t, 'mov');
+    }
+    if (!this.moving && was) {
+      var dm = this.lastAbove - this.movT0;
+      this._resetDet();
+      if (dm >= 1 && this.onEvent) this.onEvent({ k: 'movimento', t0: this.movT0, d: dm });
+    }
+    var v = [0, 0, 0];
+    for (i = 0; i < 3; i++) {
+      var hp = 0.978 * (this.hp[i] + a[i] - this.xprev[i]);
+      this.xprev[i] = a[i]; this.hp[i] = hp;
+      this.l1[i] += 0.18 * (hp - this.l1[i]);
+      this.l2[i] += 0.18 * (this.l1[i] - this.l2[i]);
+      v[i] = this.l2[i];
+    }
+    this.buf.push({ t: t, v: v, m: this.moving });
+    if (this.buf.length > 800) this.buf.shift();
+    if (t - this.lastPCA >= 1 && this.buf.length >= 200) { this.lastPCA = t; this._pca(); }
+    var sr = v[0] * this.d[0] + v[1] * this.d[1] + v[2] * this.d[2];
+    this.sh.push({ t: t, s: sr, m: this.moving ? 1 : 0 });
+    if (this.sh.length > 3200) this.sh.shift();
+    if (!this.moving && this.dReady && t - this.t0 > this.o.warm) this._detect(t, sr * this.sign);
+    this._pauseCheck(t);
+  };
+
+  Tracker.prototype._pca = function () {
+    var b = this.buf, n = 0, c = [0, 0, 0, 0, 0, 0], i, st = Math.max(0, b.length - 600);
+    for (i = st; i < b.length; i++) {
+      if (b[i].m) continue;
+      var v = b[i].v;
+      c[0] += v[0] * v[0]; c[1] += v[0] * v[1]; c[2] += v[0] * v[2];
+      c[3] += v[1] * v[1]; c[4] += v[1] * v[2]; c[5] += v[2] * v[2]; n++;
+    }
+    if (n < 150) return;
+    var C = [[c[0], c[1], c[2]], [c[1], c[3], c[4]], [c[2], c[4], c[5]]], x = this.d.slice(), k, j;
+    if (Math.abs(x[0]) + Math.abs(x[1]) + Math.abs(x[2]) === 0) x = [1, 0, 0];
+    var lam = 0;
+    for (k = 0; k < 18; k++) {
+      var y = [0, 0, 0];
+      for (i = 0; i < 3; i++) for (j = 0; j < 3; j++) y[i] += C[i][j] * x[j];
+      lam = Math.sqrt(y[0] * y[0] + y[1] * y[1] + y[2] * y[2]);
+      if (lam < 1e-12) return;
+      x = [y[0] / lam, y[1] / lam, y[2] / lam];
+    }
+    var tr = C[0][0] + C[1][1] + C[2][2];
+    this.frac = tr > 0 ? lam / tr : 0;
+    var dot = x[0] * this.d[0] + x[1] * this.d[1] + x[2] * this.d[2];
+    if (dot < 0) x = [-x[0], -x[1], -x[2]];
+    if (!this.dReady) { this.d = x; this.dReady = true; }
+    else {
+      var q = [0.8 * this.d[0] + 0.2 * x[0], 0.8 * this.d[1] + 0.2 * x[1], 0.8 * this.d[2] + 0.2 * x[2]];
+      var nn = Math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2]) || 1;
+      this.d = [q[0] / nn, q[1] / nn, q[2] / nn];
+    }
+  };
+
+  Tracker.prototype._detect = function (t, s) {
+    var det = this.det, thr, A = this.A;
+    if (!(A > 0)) {
+      var arr = [], j, mean = 0;
+      for (j = this.sh.length - 1; j >= 0 && arr.length < 300; j--) if (!this.sh[j].m) { arr.push(this.sh[j].s * this.sign); mean += arr[arr.length - 1]; }
+      if (arr.length > 100) {
+        mean /= arr.length; var vs = 0;
+        for (j = 0; j < arr.length; j++) vs += (arr[j] - mean) * (arr[j] - mean);
+        A = 2.83 * Math.sqrt(vs / arr.length);
+      }
+    }
+    thr = Math.max(this.o.minThr, 0.3 * A);
+    var mg = 0.1 * thr;
+    if (det.mode === null) { det.mode = 'up'; det.maxv = s; det.maxt = t; det.minv = s; det.mint = t; return; }
+    if (det.mode === 'up') {
+      if (s > det.maxv + mg) { det.maxv = s; det.maxt = t; }
+      else if (det.maxv - s > thr) { this._confirm('p', det.maxt, det.maxv); det.mode = 'down'; det.minv = s; det.mint = t; }
+    } else {
+      if (s < det.minv - mg) { det.minv = s; det.mint = t; }
+      else if (s - det.minv > thr) { this._confirm('v', det.mint, det.minv); det.mode = 'up'; det.maxv = s; det.maxt = t; }
+    }
+  };
+
+  Tracker.prototype._halfMed = function () {
+    var e = this.ext, h = [], i;
+    for (i = Math.max(1, e.length - 8); i < e.length; i++) h.push(e[i].t - e[i - 1].t);
+    return h.length >= 3 ? median(h) : NaN;
+  };
+
+  Tracker.prototype._confirm = function (type, t, v) {
+    if (this.skipFirst) { this.skipFirst = false; return; }
+    if (this.pauseOpen) this._closePause(t, 'resp');
+    var e = this.ext;
+    e.push({ t: t, v: v, type: type });
+    if (e.length > 60) e.shift();
+    this.lastExt = e[e.length - 1];
+    var n = e.length;
+    if (n >= 3 && e[n - 1].type === 'v' && e[n - 2].type === 'p' && e[n - 3].type === 'v') {
+      var t0 = e[n - 3].t, tp = e[n - 2].t, t1 = e[n - 1].t, T = t1 - t0, ti = tp - t0, te = t1 - tp;
+      var amp = e[n - 2].v - 0.5 * (e[n - 3].v + e[n - 1].v);
+      if (T >= 1.5 && T <= 25 && ti >= 0.4 && te >= 0.4 && amp >= this.o.minThr) {
+        var c = { t0: t0, tp: tp, t1: t1, T: T, ti: ti, te: te, amp: amp };
+        this.cycles.push(c);
+        if (this.cycles.length > 40) this.cycles.shift();
+        this.A = this.A > 0 ? 0.8 * this.A + 0.2 * amp : amp;
+        if (this.onCycle) this.onCycle(c);
+      }
+    }
+  };
+
+  Tracker.prototype._recentOK = function (t) {
+    var c = this.cycles, k = 0, i;
+    for (i = c.length - 1; i >= 0; i--) if (t - c[i].t1 < 120) k++; else break;
+    return k >= 3;
+  };
+
+  Tracker.prototype._pauseCheck = function (t) {
+    if (this.moving || this.pauseOpen || !this.lastExt) return;
+    var hm = this._halfMed();
+    if (!(hm > 0) || !this._recentOK(t)) return;
+    var gap = t - this.lastExt.t;
+    if (gap > Math.max(this.o.pauseOpen, 2.2 * hm)) this.pauseOpen = { t0: this.lastExt.t, hm: hm };
+  };
+
+  Tracker.prototype._closePause = function (t, how) {
+    var p = this.pauseOpen; this.pauseOpen = null;
+    if (!p) return;
+    var d = t - p.t0 - (how === 'resp' ? p.hm : 0);
+    if (d > 90) return;
+    if (d >= this.o.pauseMin && this.onEvent) this.onEvent({ k: 'pausa', t0: p.t0, d: d, fine: how });
+  };
+
+  Tracker.prototype.pauseLive = function () { return this.pauseOpen ? this.t - this.pauseOpen.t0 : 0; };
+
+  Tracker.prototype.stats = function () {
+    var c = this.cycles.slice(-6).filter(function (x) { return true; });
+    if (c.length < 2) return null;
+    var P = [], Ti = [], Te = [], Am = [], i;
+    for (i = 0; i < c.length; i++) { P.push(c[i].T); Ti.push(c[i].ti); Te.push(c[i].te); Am.push(c[i].amp); }
+    var per = median(P), ti = median(Ti), te = median(Te);
+    return { n: c.length, period: per, rate: 60 / per, ti: ti, te: te, ratio: te / ti, amp: median(Am), lastValley: c[c.length - 1].t1 };
+  };
+
+  /* Aggancio della guida al respiro. Prima ripete il ritmo dell'utente per qualche ciclo (aggancio di fase),
+     poi guida: il periodo scende da solo verso l'obiettivo e la fase corregge solo gli scostamenti. */
+  function Lock() { this.reset(); }
+  Lock.prototype.reset = function () { this.mode = 'mirror'; this.n = 0; this.err0 = 0; this.Tg = null; this.bad = 0; };
+  function wrapTo(x, per) { while (x > per / 2) x -= per; while (x < -per / 2) x += per; return x; }
+  Lock.prototype.next = function (o) {
+    var Tu = o.tu, err = null;
+    if (o.lastValley != null && o.nextStart - o.lastValley <= 4 * Tu) {
+      var m = Math.round((o.nextStart + o.lag - o.lastValley) / Tu);
+      err = wrapTo(o.lastValley + m * Tu - o.lag - o.nextStart, Tu);
+    }
+    if (this.Tg == null) this.Tg = Tu;
+    var T, status;
+    if (this.mode === 'mirror') {
+      T = clamp(Tu + 0.6 * (err == null ? 0 : err), 0.75 * Tu, 1.25 * Tu);
+      this.Tg = T; this.n++;
+      status = 'aggancio';
+      if (this.n >= 4 && err != null && Math.abs(err) < 0.15 * Tu) { this.mode = 'lead'; this.err0 = err; this.bad = 0; }
+    } else {
+      this.Tg += clamp(o.goalT - this.Tg, -o.pull, o.pull);
+      var ed = err == null ? 0 : wrapTo(err - this.err0, Tu);
+      T = clamp(this.Tg + 0.3 * clamp(ed, -0.6, 0.6), 0.8 * this.Tg, 1.25 * this.Tg);
+      status = ed > 0.25 * Tu ? 'attesa' : 'guida';
+      if (Math.abs(Tu - this.Tg) > 0.15 * this.Tg) this.bad++; else this.bad = 0;
+      if (Math.abs(ed) > 0.4 * Tu || this.bad >= 4) { this.mode = 'mirror'; this.n = 0; status = 'riaggancio'; }
+    }
+    return { T: clamp(T, 2.5, 20), status: status, err: err, Tg: this.Tg };
+  };
+
+  /* Correlazione tra segnale del sensore e posizione della guida. s: [{t,s,m}], uAt(t) -> 0..1 o null */
+  function calibrate(s, uAt, lagMax) {
+    var best = null, lag, i;
+    for (lag = 0; lag <= lagMax + 1e-9; lag += 0.1) {
+      var x = [], y = [];
+      for (i = 0; i < s.length; i++) {
+        if (s[i].m) continue;
+        var u = uAt(s[i].t - lag);
+        if (u == null) continue;
+        x.push(s[i].s); y.push(u);
+      }
+      if (x.length < 300) continue;
+      var mx = 0, my = 0, n = x.length;
+      for (i = 0; i < n; i++) { mx += x[i]; my += y[i]; }
+      mx /= n; my /= n;
+      var sxy = 0, sxx = 0, syy = 0;
+      for (i = 0; i < n; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) * (x[i] - mx); syy += (y[i] - my) * (y[i] - my); }
+      var r = sxy / Math.sqrt(sxx * syy || 1);
+      if (!best || Math.abs(r) > Math.abs(best.corr)) best = { corr: r, lag: lag, n: n };
+    }
+    return best;
+  }
+
+  root.RespDSP = { Tracker: Tracker, Lock: Lock, calibrate: calibrate, median: median, sm: sm, clamp: clamp };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var fmt = function (v, d) { return Number(v).toFixed(d == null ? 1 : d).replace('.', ','); };
+  var now = function () { return performance.now() / 1000; };
+  var D = RespDSP;
+
+  /* ---------- Impostazioni ---------- */
+  var DEFAULTS = { rate: 6, ratio: 1.5, sRate: 11, sRatio: 1.2, glide: 8, vol: 60, noise: 80, tone: 100, insp: 28, peak: 78,
+                   dur: 30, endless: false, wake: true, useSens: false, follow: true, pull: 15, sens: 3 };
+  var P = {}; for (var k in DEFAULTS) P[k] = DEFAULTS[k];
+  var KEY = 'respiro-sensori-v1', LOGKEY = 'respiro-log-v1';
+  try { var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+        if (saved) for (var s in DEFAULTS) if (typeof saved[s] === typeof DEFAULTS[s]) P[s] = saved[s]; } catch (e) {}
+  function persist() { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) {} }
+  var SENS = [0.12, 0.08, 0.05, 0.035, 0.025], SENSNAME = ['molto bassa', 'bassa', 'media', 'alta', 'molto alta'];
+
+  var CONTROLS = [
+    { g: 'g-sens', k: 'pull',  label: 'Quanto trascino il tuo respiro', min: 0, max: 40, step: 1, show: function (v) { return v === 0 ? 'mai' : fmt(v / 100, 2) + ' s a ciclo'; } },
+    { g: 'g-sens', k: 'sens',  label: 'Sensibilità del rilevamento', min: 1, max: 5, step: 1, show: function (v) { return SENSNAME[v - 1]; } },
+    { g: 'g-final', k: 'rate',  label: 'Atti al minuto', min: 3, max: 12, step: .5, show: function (v) { return fmt(v) + ' /min'; } },
+    { g: 'g-final', k: 'ratio', label: 'Espirazione rispetto a inspirazione', min: 1, max: 3, step: .1, show: function (v) { return '1 : ' + fmt(v); } },
+    { g: 'g-start', k: 'sRate', label: 'Atti al minuto di partenza', min: 4, max: 18, step: .5, show: function (v) { return fmt(v) + ' /min'; } },
+    { g: 'g-start', k: 'sRatio',label: 'Rapporto di partenza', min: .6, max: 3, step: .1, show: function (v) { return '1 : ' + fmt(v); } },
+    { g: 'g-start', k: 'glide', label: 'Tempo per arrivare al ritmo finale', min: 0, max: 20, step: 1, show: function (v) { return v === 0 ? 'nessuno' : v + ' min'; } },
+    { g: 'g-sound', k: 'vol',   label: 'Volume generale', min: 0, max: 100, step: 1, show: function (v) { return v + ''; } },
+    { g: 'g-sound', k: 'noise', label: 'Fruscio', min: 0, max: 100, step: 1, show: function (v) { return v + ''; } },
+    { g: 'g-sound', k: 'tone',  label: 'Voce «ooom»', min: 0, max: 200, step: 5, show: function (v) { return v + ''; } },
+    { g: 'g-sound', k: 'insp',  label: 'Livello in inspirazione', min: 0, max: 60, step: 1, show: function (v) { return v + ''; } },
+    { g: 'g-sound', k: 'peak',  label: 'Picco in espirazione', min: 30, max: 100, step: 1, show: function (v) { return v + ''; } },
+    { g: 'g-time',  k: 'dur',   label: 'Durata della guida', min: 5, max: 60, step: 5, show: function (v) { return v + ' min'; } }
+  ];
+  CONTROLS.forEach(function (c) {
+    var row = document.createElement('div'); row.className = 'row';
+    row.innerHTML = '<label for="p-' + c.k + '">' + c.label + '</label><output id="o-' + c.k + '" for="p-' + c.k + '"></output>' +
+      '<input type="range" id="p-' + c.k + '" min="' + c.min + '" max="' + c.max + '" step="' + c.step + '">';
+    $(c.g).appendChild(row);
+    var inp = $('p-' + c.k); inp.value = P[c.k];
+    inp.addEventListener('input', function () { P[c.k] = parseFloat(inp.value); refresh(); onChange(c.k); persist(); });
+  });
+  ['endless', 'wake', 'useSens', 'follow'].forEach(function (key) {
+    var el = $('p-' + key); el.checked = P[key];
+    el.addEventListener('change', function () { P[key] = el.checked; refresh(); onChange(key); persist(); });
+  });
+
+  function split(rate, ratio) { var T = 60 / rate, ti = T / (1 + ratio); return { T: T, ti: ti, te: T - ti }; }
+  function derived(rate, ratio) { var d = split(rate, ratio);
+    return '<span class="i">inspira <b>' + fmt(d.ti) + ' s</b></span> · <span class="o">espira <b>' + fmt(d.te) + ' s</b></span> · ciclo ' + fmt(d.T) + ' s'; }
+  function refresh() {
+    CONTROLS.forEach(function (c) { $('o-' + c.k).textContent = c.show(P[c.k]); $('p-' + c.k).value = P[c.k]; });
+    ['endless', 'wake', 'useSens', 'follow'].forEach(function (key) { $('p-' + key).checked = P[key]; });
+    $('p-follow').disabled = !P.useSens; $('p-pull').disabled = !(P.useSens && P.follow);
+    $('p-dur').disabled = P.endless; $('o-dur').textContent = P.endless ? 'senza fine' : P.dur + ' min';
+    $('derFinal').innerHTML = derived(P.rate, P.ratio);
+    $('derStart').innerHTML = P.glide === 0 ? 'Nessuna partenza graduale.' : 'Partenza: ' + derived(P.sRate, P.sRatio);
+    $('plan').textContent = P.useSens && P.follow
+      ? 'Aggancio al tuo respiro, poi verso ' + fmt(P.rate) + ' atti al minuto.'
+      : (P.glide === 0 ? 'Ritmo fisso: ' + fmt(P.rate) + ' atti al minuto.' : 'Da ' + fmt(P.sRate) + ' a ' + fmt(P.rate) + ' atti al minuto in ' + P.glide + ' minuti.');
+    tr.o.minThr = SENS[P.sens - 1];
+  }
+
+  /* ---------- Sensori e analisi ---------- */
+  var tr = new D.Tracker({ minThr: SENS[P.sens - 1] });
+  var lockPLL = new D.Lock();
+  var sensorsOn = false, motionCount = 0, lastMotion = 0, audioRunning = false, logging = false;
+  var sync = { state: 'off', calStart: 0, lag: 0.4, known: false, corr: null, status: '' }, lockRatio = null;
+  var guideHist = [], curGuideRate = null;
+
+  function setSens(t, warn) { var el = $('sensStatus'); el.textContent = t; el.classList.toggle('warn', !!warn); }
+  function onMotion(e) {
+    var a = e.accelerationIncludingGravity;
+    if (!a || a.x == null || a.y == null || a.z == null) return;
+    var t = now(); lastMotion = t; motionCount++; tr.push(t, a.x, a.y, a.z);
+  }
+  function diag() {
+    var ua = navigator.userAgent, m = /Chrome\/(\d+)/.exec(ua), br = /; wv\)|Version\/[\d.]+ Chrome/.test(ua) ? 'WebView (anteprima dentro un\'app)' : (/Firefox/.test(ua) ? 'Firefox' : (/SamsungBrowser/.test(ua) ? 'Samsung Internet' : (m ? 'Chrome ' + m[1] : 'altro browser')));
+    return br + ', protocollo ' + location.protocol.replace(':', '') + ', contesto sicuro: ' + (window.isSecureContext ? 'sì' : 'no');
+  }
+  var HELP = 'Apri il file con Chrome (non dall\'anteprima di un\'app). In Chrome: icona accanto all\'indirizzo, Autorizzazioni, Sensori di movimento: consenti. Se l\'indirizzo non inizia con file:/// prova a incollarlo: file:///storage/emulated/0/Download/respiro_sensori.html';
+  async function enableSensors() {
+    if (sensorsOn) return true;
+    var perm = 'non richiesto';
+    try {
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') perm = await DeviceMotionEvent.requestPermission();
+    } catch (e) { perm = 'errore'; }
+    if (typeof DeviceMotionEvent === 'undefined') { setSens('Questo browser non offre i sensori di movimento. [' + diag() + ']', true); return false; }
+    tr.reset(); motionCount = 0; sync.known = false; sync.state = 'off';
+    window.addEventListener('devicemotion', onMotion); sensorsOn = true;
+    var waitMs = perm === 'granted' || perm === 'non richiesto' ? 3000 : 2500;
+    setSens('Attendo i dati dai sensori…');
+    await new Promise(function (r) { setTimeout(r, waitMs); });
+    if (motionCount === 0 && typeof window.Accelerometer === 'function') {
+      try {
+        accSensor = new window.Accelerometer({ frequency: 30 });
+        accSensor.addEventListener('reading', function () { var t = now(); lastMotion = t; motionCount++; tr.push(t, accSensor.x, accSensor.y, accSensor.z); });
+        accSensor.addEventListener('error', function () {});
+        accSensor.start(); viaAcc = true;
+        await new Promise(function (r) { setTimeout(r, 2500); });
+      } catch (e) { accSensor = null; }
+    }
+    if (motionCount === 0) {
+      disableSensors();
+      setSens((perm === 'granted' || perm === 'non richiesto' ? 'Nessun dato dai sensori.' : 'Permesso ai sensori negato.') + ' [' + diag() + (typeof window.Accelerometer === 'function' ? ', Accelerometer provato' : ', Accelerometer assente') + '] ' + HELP, true);
+      return false;
+    }
+    return true;
+  }
+  var accSensor = null, viaAcc = false;
+  function disableSensors() { window.removeEventListener('devicemotion', onMotion); try { if (accSensor) accSensor.stop(); } catch (e) {} accSensor = null; viaAcc = false; sensorsOn = false; sync.state = 'off'; }
+
+  tr.onCycle = function (c) { if (S) cur.cyc.push(c); };
+  tr.onEvent = function (e) {
+    if (!S) return;
+    S.events.push({ k: e.k, t: +(e.t0 - S.p0 + (S.skew || 0)).toFixed(1), d: +e.d.toFixed(1) });
+    if (S.events.length > 1500) S.events.shift();
+    if (e.k === 'pausa') { cur.p6++; if (e.d >= 10) cur.p10++; if (e.d > cur.pmax) cur.pmax = e.d; }
+  };
+
+  /* ---------- Motore audio ---------- */
+  var FLOOR = 0.05;
+  var ctx = null, nodes = null, timer = 0, raf = 0, t0 = 0, nextStart = 0, endT = Infinity, cycles = [], wl = null, lastShown = -1;
+  function sm(x) { x = x < 0 ? 0 : x > 1 ? 1 : x; return 0.5 - 0.5 * Math.cos(Math.PI * x); }
+  function env(p, ti, te) {
+    var ins = P.insp / 100, pk = P.peak / 100;
+    if (p < ti) return FLOOR + (ins - FLOOR) * sm(p / ti);
+    var q = p - ti, rl = Math.min(1.2, 0.25 * te);
+    if (q < rl) return ins + (pk - ins) * sm(q / rl);
+    var r = Math.min(1, (q - rl) / (te - rl));
+    return FLOOR + (pk - FLOOR) * (0.5 + 0.5 * Math.cos(Math.PI * r));
+  }
+  function brownBuffer(c) {
+    var sr = c.sampleRate, n = Math.round(sr * 20), f = Math.round(sr * 2);
+    var buf = c.createBuffer(2, n, sr), a = Math.exp(-2 * Math.PI * 35 / sr);
+    for (var ch = 0; ch < 2; ch++) {
+      var x = new Float32Array(n + f), acc = 0, i, sum = 0, mx = 0;
+      for (i = 0; i < n + f; i++) { acc = a * acc + (Math.random() + Math.random() + Math.random() - 1.5); x[i] = acc; sum += acc; }
+      var mean = sum / (n + f);
+      for (i = 0; i < n + f; i++) { x[i] -= mean; var ab = Math.abs(x[i]); if (ab > mx) mx = ab; }
+      var out = buf.getChannelData(ch), g = 0.9 / mx;
+      for (i = 0; i < n; i++) out[i] = (i < f ? x[i] * (i / f) + x[n + i] * (1 - i / f) : x[i]) * g;
+    }
+    return buf;
+  }
+  function oooWave(c) {
+    var N = 24, re = new Float32Array(N + 1), im = new Float32Array(N + 1);
+    for (var k = 1; k <= N; k++) { var fk = k * 104; im[k] = Math.exp(-Math.pow((fk - 300) / 120, 2)) + 0.5 * Math.exp(-Math.pow((fk - 800) / 200, 2)); }
+    return c.createPeriodicWave(re, im);
+  }
+  function build() {
+    var AC = window.AudioContext || window.webkitAudioContext; ctx = new AC();
+    var n = {};
+    n.noise = ctx.createBufferSource(); n.noise.buffer = brownBuffer(ctx); n.noise.loop = true;
+    n.noiseEnv = ctx.createGain(); n.noiseEnv.gain.value = FLOOR;
+    n.noiseLvl = ctx.createGain(); n.noiseLvl.gain.value = P.noise / 100;
+    n.master = ctx.createGain(); n.master.gain.value = P.vol / 100 * 0.9;
+    n.fade = ctx.createGain(); n.fade.gain.value = 0;
+    n.comp = ctx.createDynamicsCompressor(); n.comp.threshold.value = -8; n.comp.ratio.value = 4;
+    n.toneSum = ctx.createGain(); n.toneSum.gain.value = 1 / 3;
+    n.toneLP = ctx.createBiquadFilter(); n.toneLP.type = 'lowpass'; n.toneLP.frequency.value = 400; n.toneLP.Q.value = 0.5;
+    n.toneEnv = ctx.createGain(); n.toneEnv.gain.value = 0;
+    n.toneLvl = ctx.createGain(); n.toneLvl.gain.value = 0.12 * P.tone / 100;
+    var w = oooWave(ctx); n.oscs = [];
+    [103.7, 104, 104.3].forEach(function (f) { var o = ctx.createOscillator(); o.setPeriodicWave(w); o.frequency.value = f; o.connect(n.toneSum); n.oscs.push(o); });
+    n.noise.connect(n.noiseEnv); n.noiseEnv.connect(n.noiseLvl); n.noiseLvl.connect(n.master);
+    n.toneSum.connect(n.toneLP); n.toneLP.connect(n.toneEnv); n.toneEnv.connect(n.toneLvl); n.toneLvl.connect(n.master);
+    n.master.connect(n.fade); n.fade.connect(n.comp); n.comp.connect(ctx.destination);
+    nodes = n;
+  }
+  function paramsAt(el) {
+    var g = P.glide * 60, k = g > 0 ? Math.min(1, Math.max(0, el / g)) : 1;
+    return { rate: P.sRate + (P.rate - P.sRate) * k, ratio: P.sRatio + (P.ratio - P.sRatio) * k };
+  }
+  function latency() { return (ctx.outputLatency || ctx.baseLatency || 0); }
+
+  /* Parametri del prossimo ciclo: ritmo fisso oppure agganciato al respiro rilevato */
+  function guideFor(startCtx) {
+    if (sync.state === 'lock') {
+      var st = tr.stats(), np = now();
+      if (st && np - st.lastValley < 2.5 * st.period + 2) {
+        var off = np - ctx.currentTime;
+        var r = lockPLL.next({ tu: st.period, lastValley: st.lastValley, nextStart: startCtx + off + latency(), lag: sync.lag, goalT: 60 / P.rate, pull: P.pull / 100 });
+        if (lockRatio == null) lockRatio = Math.max(0.8, Math.min(2.5, st.ratio || 1.2));
+        lockRatio += Math.max(-0.05, Math.min(0.05, P.ratio - lockRatio));
+        var ti = r.T / (1 + lockRatio);
+        sync.status = r.status;
+        return { T: r.T, ti: ti, te: r.T - ti, rate: 60 / r.T, status: r.status };
+      }
+      sync.status = 'persa';
+    }
+    var pr = paramsAt(startCtx - t0), d = split(pr.rate, pr.ratio);
+    return { T: d.T, ti: d.ti, te: d.te, rate: pr.rate, status: sync.state === 'cal' ? 'calibrazione' : '' };
+  }
+  function scheduleCycle() {
+    var d = guideFor(nextStart);
+    var n = Math.max(48, Math.round(d.T * 25)), a = new Float32Array(n), b = new Float32Array(n), cut = new Float32Array(n);
+    var pk = Math.max(0.2, P.peak / 100);
+    for (var i = 0; i < n; i++) { var e = env(i / (n - 1) * d.T, d.ti, d.te); a[i] = e; b[i] = e * e; cut[i] = 350 + 1500 * Math.min(1, e / pk); }
+    nodes.noiseEnv.gain.setValueCurveAtTime(a, nextStart, d.T);
+    nodes.toneEnv.gain.setValueCurveAtTime(b, nextStart, d.T);
+    nodes.toneLP.frequency.setValueCurveAtTime(cut, nextStart, d.T);
+    cycles.push({ s: nextStart, ti: d.ti, te: d.te, T: d.T, rate: d.rate, status: d.status });
+    if (cycles.length > 20) cycles.shift();
+    guideHist.push({ sa: nextStart + (now() - ctx.currentTime) + latency(), T: d.T, ti: d.ti, te: d.te });
+    if (guideHist.length > 90) guideHist.shift();
+    nextStart += d.T + 0.002;
+  }
+  function uGuide(t) {
+    for (var i = guideHist.length - 1; i >= 0; i--) {
+      var c = guideHist[i];
+      if (t >= c.sa && t < c.sa + c.T) { var p = t - c.sa; return p < c.ti ? sm(p / c.ti) : 1 - sm((p - c.ti) / c.te); }
+    }
+    return null;
+  }
+  function doCalibrate() {
+    var res = D.calibrate(tr.sh.filter(function (x) { return x.t > now() - 110; }), uGuide, 1.8);
+    sync.corr = res ? res.corr : null;
+    if (res && Math.abs(res.corr) >= 0.3) {
+      tr.setSign(res.corr >= 0 ? 1 : -1); sync.lag = Math.max(0.1, res.lag); sync.known = true;
+      sync.state = 'lock'; lockPLL.reset(); lockRatio = null;
+    } else { sync.state = 'fail'; }
+  }
+  function tick() {
+    if (!audioRunning) return;
+    var look = document.hidden ? 150 : 3;
+    while (nextStart < ctx.currentTime + look && nextStart < endT) scheduleCycle();
+    if (ctx.currentTime >= endT + 0.3) stopAudio();
+  }
+  function applyTimer(initial) {
+    var g = nodes.fade.gain, nw = ctx.currentTime;
+    g.cancelScheduledValues(initial ? 0 : nw);
+    if (initial) { g.setValueAtTime(0, t0); g.linearRampToValueAtTime(1, t0 + 8); }
+    else { g.setValueAtTime(g.value, nw); g.linearRampToValueAtTime(1, nw + 2); }
+    endT = P.endless ? Infinity : t0 + P.dur * 60;
+    if (isFinite(endT)) {
+      if (!initial && endT < nw + 4) endT = nw + 4;
+      var fl = Math.min(60, Math.max(3, (endT - t0) / 3));
+      var fs = Math.max(endT - fl, initial ? t0 + 8.1 : nw + 2.1);
+      g.setValueAtTime(1, fs); g.linearRampToValueAtTime(0, endT);
+    }
+  }
+  function onChange(key) {
+    if (key === 'useSens' && !P.useSens && sensorsOn && !logging) disableSensors();
+    if (key === 'wake') { if (P.wake && (audioRunning || logging)) lock(); else unlock(); }
+    if (!audioRunning || !nodes) return;
+    var nw = ctx.currentTime;
+    if (key === 'vol') nodes.master.gain.setTargetAtTime(P.vol / 100 * 0.9, nw, 0.08);
+    if (key === 'noise') nodes.noiseLvl.gain.setTargetAtTime(P.noise / 100, nw, 0.08);
+    if (key === 'tone') nodes.toneLvl.gain.setTargetAtTime(0.12 * P.tone / 100, nw, 0.08);
+    if (key === 'dur' || key === 'endless') applyTimer(false);
+  }
+  async function lock() { try { if (P.wake && 'wakeLock' in navigator && !wl) { wl = await navigator.wakeLock.request('screen'); wl.addEventListener('release', function () { wl = null; }); } } catch (e) { wl = null; } }
+  function unlock() { try { if (wl) wl.release(); } catch (e) {} wl = null; }
+
+  async function startAudio() {
+    try {
+      build(); await ctx.resume();
+      t0 = ctx.currentTime + 0.15; nextStart = t0; cycles = []; guideHist = []; lastShown = -1; lockRatio = null;
+      nodes.noise.start(t0); nodes.oscs.forEach(function (o) { o.start(t0); });
+      audioRunning = true; applyTimer(true);
+      if (sensorsOn && P.useSens && P.follow) { sync.state = 'cal'; sync.calStart = now(); lockPLL.reset(); sync.known = false; tr.setSign(1); } else sync.state = 'off';
+      tick(); timer = setInterval(tick, 200); raf = requestAnimationFrame(frame); lock();
+      if (S) S.guide = true;
+      updateButtons();
+    } catch (e) { audioRunning = false; $('phase').textContent = 'Audio non disponibile'; $('count').textContent = ''; }
+  }
+  function stopAudio() {
+    if (!audioRunning) return;
+    audioRunning = false; clearInterval(timer); cancelAnimationFrame(raf);
+    if (!logging) unlock();
+    var c = ctx, n = nodes;
+    try { var g = n.fade.gain, nw = c.currentTime; g.cancelScheduledValues(0); g.setValueAtTime(g.value, nw); g.linearRampToValueAtTime(0, nw + 1.2); } catch (e) {}
+    setTimeout(function () { try { c.close(); } catch (e) {} }, 1500);
+    ctx = null; nodes = null; curGuideRate = null;
+    if (sync.state !== 'off') sync.state = 'off';
+    $('stage').dataset.phase = 'idle'; $('orb').style.transform = 'scale(.72)';
+    $('phase').textContent = 'Pronto'; $('count').textContent = ''; $('now').textContent = '';
+    updateButtons();
+  }
+
+  function mmss(sec) { sec = Math.max(0, Math.round(sec)); return Math.floor(sec / 60) + ':' + ('0' + (sec % 60)).slice(-2); }
+  var STATUSTXT = { aggancio: 'Mi aggancio al tuo respiro', guida: 'Ti accompagno', attesa: 'Ti aspetto', riaggancio: 'Mi riaggancio', persa: 'Segnale perso: ritmo libero', calibrazione: 'Calibrazione in corso' };
+  function frame() {
+    if (!audioRunning) return;
+    var t = ctx.currentTime - latency(), c = null, i;
+    for (i = cycles.length - 1; i >= 0; i--) if (cycles[i].s <= t && t < cycles[i].s + cycles[i].T) { c = cycles[i]; break; }
+    if (c) {
+      var p = t - c.s, inh = p < c.ti, u, left;
+      if (inh) { u = sm(p / c.ti); left = c.ti - p; } else { u = 1 - sm((p - c.ti) / c.te); left = c.T - p; }
+      $('orb').style.transform = 'scale(' + (0.5 + 0.5 * u).toFixed(3) + ')';
+      $('stage').dataset.phase = inh ? 'in' : 'out';
+      $('phase').textContent = inh ? 'Inspira' : 'Espira';
+      $('count').textContent = fmt(Math.max(0, left)) + ' s';
+      curGuideRate = c.rate;
+      if (lastShown !== c.s) {
+        lastShown = c.s;
+        $('now').innerHTML = 'Ora ' + fmt(c.rate) + ' atti al minuto · inspira ' + fmt(c.ti) + ' s · espira ' + fmt(c.te) + ' s<br>' +
+          (STATUSTXT[c.status] ? STATUSTXT[c.status] + ' · ' : '') + 'trascorsi ' + mmss(t - t0) + (isFinite(endT) ? ' di ' + mmss(endT - t0) : '');
+      }
+    }
+    raf = requestAnimationFrame(frame);
+  }
+
+  /* ---------- Sessione e registro ---------- */
+  var S = null, cur = null, sessions = [], viewIdx = -1;
+  try { var raw = JSON.parse(localStorage.getItem(LOGKEY) || '[]'); if (Array.isArray(raw)) sessions = raw.filter(function (x) { return x && Array.isArray(x.bins) && Array.isArray(x.events); }); } catch (e) {}
+  viewIdx = sessions.length - 1;
+  /* Registrazione rimasta aperta (pagina chiusa o uccisa dal telefono): l'ultimo battito dice fino a quando era viva. */
+  try { var hb0 = JSON.parse(localStorage.getItem('respiro-hb-v1') || 'null'), ls0 = sessions[sessions.length - 1];
+        if (hb0 && ls0 && ls0.id === hb0.id && !ls0.fin) ls0.cut = hb0.last; } catch (e) {}
+  function persistLog() { try { localStorage.setItem(LOGKEY, JSON.stringify(sessions)); } catch (e) { try { sessions.shift(); localStorage.setItem(LOGKEY, JSON.stringify(sessions)); } catch (e2) {} } }
+  function newBin(i) { return { i: i, cyc: [], mv: 0, p6: 0, p10: 0, pmax: 0, g: [] }; }
+  function med(a) { return a.length ? D.median(a) : null; }
+  function r1(x) { return x == null ? null : +x.toFixed(1); }
+  function closeBin(b) {
+    var cy = b.cyc, T = cy.map(function (c) { return c.T; });
+    return { i: b.i, n: cy.length, r: cy.length ? r1(60 / med(T)) : null,
+      ti: r1(med(cy.map(function (c) { return c.ti; }))), te: r1(med(cy.map(function (c) { return c.te; }))),
+      a: cy.length ? +med(cy.map(function (c) { return c.amp; })).toFixed(3) : null,
+      p6: b.p6, p10: b.p10, pm: Math.round(b.pmax), mv: Math.round(b.mv), g: r1(med(b.g)), x: S ? gapIn(S, b.i * 60, b.i * 60 + 60) : 0 };
+  }
+  /* Secondi senza dati (buchi) che cadono in [a, b], in secondi dall'inizio della sessione */
+  function gapIn(s, a, b) {
+    var tot = 0; (s.gaps || []).forEach(function (g) { var lo = Math.max(a, g[0]), hi = Math.min(b, g[1]); if (hi > lo) tot += hi - lo; });
+    if (s === S && lastTickWall && Date.now() - lastTickWall > 4000) { var lo2 = Math.max(a, (lastTickWall - s.t0) / 1000), hi2 = Math.min(b, (Date.now() - s.t0) / 1000); if (hi2 > lo2) tot += hi2 - lo2; }
+    return Math.round(tot);
+  }
+  var lastTickWall = 0, lastTickNow = 0, lastBeat = 0, HBKEY = 'respiro-hb-v1';
+  function beat() { try { localStorage.setItem(HBKEY, JSON.stringify({ id: S.id, last: Date.now() })); } catch (e) {} }
+  /* Porta avanti i minuti del registro. Se il timer si è fermato (schermo spento, pagina sospesa) segna il buco. */
+  function advance() {
+    if (!(logging && S)) return;
+    var w = Date.now();
+    if (lastTickWall && w - lastTickWall > 4000) {
+      var a = (lastTickWall - S.t0) / 1000, b = (w - S.t0) / 1000;
+      S.gaps.push([+a.toFixed(1), +b.toFixed(1)]); S.events.push({ k: 'dati assenti', t: +a.toFixed(1), d: +(b - a).toFixed(1), w: 1 });
+      S.skew = (S.skew || 0) + Math.max(0, (w - lastTickWall) / 1000 - (now() - lastTickNow));
+      if (S.events.length > 1500) S.events.shift();
+    }
+    lastTickWall = w; lastTickNow = now(); S.last = w;
+    var idx = Math.floor((w - S.t0) / 60000);
+    while (cur.i < idx) { S.bins.push(closeBin(cur)); cur = newBin(cur.i + 1); persistLog(); }
+    if (w - lastBeat >= 10000) { lastBeat = w; beat(); }
+  }
+  function logStart() {
+    S = { id: Date.now(), t0: Date.now(), p0: now(), bins: [], events: [], guide: audioRunning, gaps: [], skew: 0, last: Date.now() };
+    cur = newBin(0); sessions.push(S); if (sessions.length > 5) sessions.shift();
+    lastTickWall = Date.now(); lastTickNow = now(); lastBeat = 0;
+    viewIdx = sessions.length - 1; logging = true; persistLog(); beat(); lock(); updateButtons(); renderLog();
+  }
+  function logStop() {
+    if (!logging) return;
+    advance(); S.fin = true;
+    S.bins.push(closeBin(cur)); persistLog(); logging = false; S = null; cur = null; lastTickWall = 0;
+    disableSensors(); if (!audioRunning) unlock();
+    setSens('Sensori spenti.'); $('syncStatus').hidden = true;
+    updateButtons(); renderLog();
+  }
+  function sec() {
+    if (logging && S) {
+      advance();
+      if (tr.moving) cur.mv++;
+      if (audioRunning && curGuideRate) cur.g.push(curGuideRate);
+    }
+    if (sync.state === 'cal' && audioRunning && now() - sync.calStart >= 100) doCalibrate();
+    updateStatus();
+    if (!$('dark').hidden) $('darkInfo').textContent = logging ? 'Registrazione ' + mmss(now() - S.p0) + (tr.stats() ? ' · respiro ' + fmt(tr.stats().rate) + '/min' : '') : '';
+  }
+  setInterval(sec, 1000);
+
+  function updateButtons() {
+    $('go').textContent = audioRunning ? 'Ferma guida' : 'Avvia guida'; $('go').dataset.on = audioRunning ? '1' : '0';
+    $('logBtn').textContent = logging ? 'Ferma registro' : 'Registra la notte'; $('logBtn').dataset.on = logging ? '1' : '0';
+  }
+  function updateStatus() {
+    if (!sensorsOn) { return; }
+    var t = now();
+    if (motionCount === 0) return;
+    var st = tr.stats(), txt, warn = false;
+    if (t - lastMotion > 3) { txt = 'I sensori hanno smesso di inviare dati. Tieni lo schermo acceso.'; warn = true; }
+    else if (tr.moving) txt = 'Movimento: aspetto che il telefono torni fermo.';
+    else if (!tr.dReady || tr.t - tr.t0 < 16) txt = 'Preparo il segnale…';
+    else if (tr.pauseLive() >= 6) { txt = 'Nessun movimento di respiro da ' + Math.round(tr.pauseLive()) + ' s.'; warn = true; }
+    else if (st && t - st.lastValley < 3 * st.period + 2) {
+      txt = 'Respiro rilevato: ' + fmt(st.rate) + ' atti/min · inspira ' + fmt(st.ti) + ' s · espira ' + fmt(st.te) + ' s' + (sync.known ? '' : ' (fase non calibrata)');
+    } else { txt = 'Segnale debole o assente. Appoggia il telefono sull\'addome, fermo.'; warn = true; }
+    setSens(txt, warn);
+    var sy = $('syncStatus'), msg = '';
+    if (sync.state === 'cal') msg = 'Calibrazione: segui la guida per altri ' + Math.max(0, Math.round(100 - (t - sync.calStart))) + ' s.';
+    else if (sync.state === 'lock') msg = 'Aggancio attivo' + (sync.status && STATUSTXT[sync.status] ? ': ' + STATUSTXT[sync.status].toLowerCase() : '') + ' (correlazione ' + fmt(Math.abs(sync.corr), 2) + ').';
+    else if (sync.state === 'fail') msg = 'Calibrazione non riuscita' + (sync.corr != null ? ' (correlazione ' + fmt(Math.abs(sync.corr), 2) + ')' : '') + ': la guida resta a ritmo fisso. Controlla il segnale e premi «Ricalibra».';
+    sy.hidden = !msg; sy.textContent = msg; sy.classList.toggle('warn', sync.state === 'fail');
+  }
+  $('flipBtn').addEventListener('click', function () {
+    if (!sensorsOn) return;
+    tr.setSign(-tr.sign); sync.known = true;
+  });
+  $('recalBtn').addEventListener('click', function () {
+    if (!(sensorsOn && audioRunning && P.follow)) { $('syncStatus').hidden = false; $('syncStatus').textContent = 'Per ricalibrare serve la guida attiva con i sensori e l\'aggancio acceso.'; return; }
+    sync.state = 'cal'; sync.calStart = now(); lockPLL.reset(); lockRatio = null; sync.known = false; tr.setSign(1);
+  });
+
+  /* ---------- Disegni ---------- */
+  function cssv(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function setupCanvas(cv) {
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    var c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+    return { c: c, w: w, h: h };
+  }
+  function drawWave() {
+    var o = setupCanvas($('wave')), c = o.c, w = o.w, h = o.h, W = 30, tE = tr.t || now(), tS = tE - W;
+    var cMuted = cssv('--muted'), cOut = cssv('--out'), cIn = cssv('--in'), cWarn = cssv('--warn');
+    c.strokeStyle = cssv('--line'); c.lineWidth = 1; c.beginPath(); c.moveTo(0, h / 2); c.lineTo(w, h / 2); c.stroke();
+    if (!sensorsOn || !tr.sh.length) { c.fillStyle = cMuted; c.font = '13px sans-serif'; c.fillText('Segnale non attivo', 12, h / 2 - 8); return; }
+    var pts = [], mags = [], i, sg = tr.sign;
+    for (i = tr.sh.length - 1; i >= 0 && tr.sh[i].t >= tS; i--) { pts.push(tr.sh[i]); if (!tr.sh[i].m) mags.push(Math.abs(tr.sh[i].s)); }
+    pts.reverse(); mags.sort(function (a, b) { return a - b; });
+    var sc = Math.max(0.06, (mags.length ? mags[Math.floor(mags.length * 0.97)] : 0.06) * 1.15);
+    var X = function (t) { return (t - tS) / W * w; }, Y = function (s) { return h / 2 - Math.max(-1.3, Math.min(1.3, s * sg / sc)) * (h / 2 - 8); };
+    c.globalAlpha = 0.18; c.fillStyle = cMuted;
+    var st = null;
+    for (i = 0; i < pts.length; i++) { if (pts[i].m && st == null) st = pts[i].t; if ((!pts[i].m || i === pts.length - 1) && st != null) { c.fillRect(X(st), 0, X(pts[i].t) - X(st), h); st = null; } }
+    if (tr.pauseOpen) { c.fillStyle = cWarn; c.fillRect(Math.max(0, X(tr.pauseOpen.t0)), 0, w, h); }
+    c.globalAlpha = 1;
+    c.strokeStyle = cOut; c.lineWidth = 2; c.beginPath();
+    pts.forEach(function (p, j) { var x = X(p.t), y = Y(p.s); if (j === 0) c.moveTo(x, y); else c.lineTo(x, y); });
+    c.stroke();
+    tr.ext.forEach(function (e) {
+      if (e.t < tS) return; var x = X(e.t), y = h / 2 - Math.max(-1.3, Math.min(1.3, e.v / sc)) * (h / 2 - 8);
+      c.fillStyle = e.type === 'v' ? cIn : cOut; c.beginPath(); c.arc(x, y, 4, 0, 6.2832); c.fill();
+    });
+    c.fillStyle = cMuted; c.font = '12px sans-serif'; c.fillText('30 s', w - 34, h - 6);
+  }
+  setInterval(function () { if (!document.hidden) drawWave(); }, 150);
+
+  function binsOf(sess) { var b = sess.bins.slice(); if (sess === S && cur) b.push(closeBin(cur)); return b; }
+  function clock(sess, secs) { return new Date(sess.t0 + secs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }); }
+  function drawChart(sess) {
+    var o = setupCanvas($('chart')), c = o.c, w = o.w, h = o.h, bins = sess ? binsOf(sess) : [];
+    var cMuted = cssv('--muted'), cOut = cssv('--out'), cIn = cssv('--in'), cWarn = cssv('--warn'), cLine = cssv('--line');
+    c.font = '11px sans-serif';
+    if (!bins.length) { c.fillStyle = cMuted; c.fillText('Nessuna registrazione ancora', 12, h / 2); return; }
+    var L = 30, R = 8, Tp = 10, B = 24, n = Math.max(10, bins.length);
+    var rates = bins.map(function (b) { return b.r; }).filter(function (x) { return x != null; }).concat(bins.map(function (b) { return b.g; }).filter(function (x) { return x != null; }));
+    var ymax = Math.max(20, Math.ceil((rates.length ? Math.max.apply(null, rates) : 20) / 5) * 5);
+    var X = function (i) { return L + (i + 0.5) / n * (w - L - R); }, Y = function (v) { return Tp + (1 - v / ymax) * (h - Tp - B); };
+    c.strokeStyle = cLine; c.fillStyle = cMuted; c.lineWidth = 1;
+    for (var g = 0; g <= ymax; g += 5) { c.beginPath(); c.moveTo(L, Y(g)); c.lineTo(w - R, Y(g)); c.stroke(); c.fillText(g, 4, Y(g) + 4); }
+    var step = n <= 30 ? 5 : n <= 90 ? 15 : n <= 240 ? 30 : 60;
+    for (var m = 0; m < n; m += step) c.fillText(clock(sess, m * 60), X(m) - 12, h - 8);
+    bins.forEach(function (b) { if (b.mv > 0) { c.globalAlpha = 0.25 + 0.5 * Math.min(1, b.mv / 60); c.fillStyle = cMuted; c.fillRect(X(b.i) - 1.5, h - B - 6, 3, 6); c.globalAlpha = 1; } });
+    function line(key, col, dash) {
+      c.strokeStyle = col; c.lineWidth = 2; c.setLineDash(dash || []); c.beginPath(); var open = false;
+      bins.forEach(function (b) { var v = b[key]; if (v == null) { open = false; return; } if (!open) { c.moveTo(X(b.i), Y(v)); open = true; } else c.lineTo(X(b.i), Y(v)); });
+      c.stroke(); c.setLineDash([]);
+    }
+    line('g', cIn, [5, 4]); line('r', cOut);
+    bins.forEach(function (b) { if (b.p10 > 0) { c.fillStyle = cWarn; c.beginPath(); c.arc(X(b.i), Tp + 4, 4.5, 0, 6.2832); c.fill(); } else if (b.p6 > 0) { c.strokeStyle = cWarn; c.lineWidth = 1.5; c.beginPath(); c.arc(X(b.i), Tp + 4, 4, 0, 6.2832); c.stroke(); } });
+  }
+  function renderLog() {
+    var sel = $('sessSel'), sess = sessions[viewIdx] || null;
+    sel.innerHTML = '';
+    sessions.forEach(function (s, i) {
+      var op = document.createElement('option'); op.value = i;
+      var d = new Date(s.t0), mins = binsOf(s).length;
+      op.textContent = d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) + ' · ' + (mins >= 60 ? Math.floor(mins / 60) + ' h ' + (mins % 60) + ' min' : mins + ' min') + (s === S ? ' · in corso' : '');
+      sel.appendChild(op);
+    });
+    if (!sessions.length) { var o0 = document.createElement('option'); o0.textContent = 'Nessuna registrazione'; sel.appendChild(o0); }
+    sel.value = viewIdx;
+    var box = $('summary'), list = $('evList'); list.innerHTML = '';
+    if (!sess) { box.innerHTML = '<span>Premi «Registra la notte» o avvia la guida con i sensori attivi.</span>'; drawChart(null); $('chartHint').textContent = ''; return; }
+    var bins = binsOf(sess), rates = bins.map(function (b) { return b.r; }).filter(function (x) { return x != null; }).sort(function (a, b) { return a - b; });
+    var mins = bins.length, ps = sess.events.filter(function (e) { return e.k === 'pausa'; }), p10 = ps.filter(function (e) { return e.d >= 10; });
+    var mv = bins.reduce(function (a, b) { return a + b.mv; }, 0), hours = mins / 60;
+    var miss = bins.reduce(function (a, b) { return a + (b.x || 0); }, 0), live = Math.max(0, mins * 60 - miss);
+    var lines = [];
+    lines.push('Registrati <b>' + mins + ' min</b>, con respiro rilevato in <b>' + rates.length + '</b>.');
+    if (miss >= 10) lines.push('<b>Dati assenti per ' + Math.round(miss / 60 * 10) / 10 + ' min</b>: il telefono ha fermato la pagina (schermo spento o app in secondo piano). Le pause in quel tratto non sono misurate.');
+    if (sess.cut) lines.push('<b>Registrazione interrotta</b>: ultimo segnale alle ' + new Date(sess.cut).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) + '.');
+    if (rates.length) lines.push('Ritmo tipico <b>' + fmt(D.median(rates)) + ' atti/min</b> (da ' + fmt(rates[Math.floor(rates.length * 0.1)]) + ' a ' + fmt(rates[Math.floor(rates.length * 0.9)]) + ').');
+    lines.push('Pause di almeno 10 s: <b>' + p10.length + '</b>' + (hours >= 0.5 ? ' (circa ' + fmt(p10.length / hours) + ' all\'ora)' : '') + '; di almeno 6 s: <b>' + ps.length + '</b>' + (ps.length ? ', la più lunga ' + Math.round(Math.max.apply(null, ps.map(function (e) { return e.d; }))) + ' s' : '') + '.');
+    lines.push('Movimento: <b>' + (live > 0 ? Math.round(mv / live * 100) : 0) + '%</b> del tempo con dati.');
+    if (hours < 0.5) lines.push('<span style="color:var(--muted)">Registrazione ancora breve: i numeri per ora diventano più utili dopo mezz\'ora.</span>');
+    box.innerHTML = lines.map(function (l) { return '<span>' + l + '</span>'; }).join('');
+    ps.slice().reverse().slice(0, 12).forEach(function (e) { var li = document.createElement('li'); li.textContent = clock(sess, e.t) + ' · pausa di ' + Math.round(e.d) + ' s'; list.appendChild(li); });
+    if (!ps.length) { var li0 = document.createElement('li'); li0.textContent = 'Nessuna pausa registrata.'; li0.style.listStyle = 'none'; list.appendChild(li0); }
+    $('chartHint').textContent = 'Linea sabbia: ritmo misurato. Linea verde tratteggiata: ritmo della guida. Pallino pieno: pausa di almeno 10 s, vuoto: almeno 6 s. Trattini grigi in basso: movimento.';
+    drawChart(sess);
+  }
+  $('sessSel').addEventListener('change', function () { viewIdx = parseInt(this.value, 10); renderLog(); });
+  setInterval(function () { if (logging && !document.hidden) renderLog(); }, 15000);
+  window.addEventListener('resize', function () { renderLog(); drawWave(); });
+
+  /* ---------- CSV ---------- */
+  function num(v, d) { return v == null ? '' : fmt(v, d == null ? 1 : d); }
+  function csvFor(sess) {
+    var rows = ['minuto;ora;atti_min;inspirazione_s;espirazione_s;ampiezza;cicli;pause_6s;pause_10s;pausa_max_s;movimento_s;guida_atti_min;dati_assenti_s'];
+    binsOf(sess).forEach(function (b) { rows.push([b.i, clock(sess, b.i * 60), num(b.r), num(b.ti), num(b.te), num(b.a, 3), b.n, b.p6, b.p10, b.pm, b.mv, num(b.g), b.x || 0].join(';')); });
+    rows.push(''); rows.push('tipo;inizio_s;ora;durata_s');
+    sess.events.forEach(function (e) { rows.push([e.k, fmt(e.t), clock(sess, e.t), fmt(e.d)].join(';')); });
+    if (sess.cut) rows.push('registrazione interrotta;;' + new Date(sess.cut).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ';ultimo segnale di vita');
+    return rows.join('\n');
+  }
+  $('csvBtn').addEventListener('click', function () {
+    var sess = sessions[viewIdx]; if (!sess) { $('csvMsg').textContent = 'Nessuna registrazione da scaricare.'; return; }
+    try {
+      var d = new Date(sess.t0), name = 'respiro_' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2) + '_' + ('0' + d.getHours()).slice(-2) + ('0' + d.getMinutes()).slice(-2) + '.csv';
+      var blob = new Blob(['﻿' + csvFor(sess)], { type: 'text/csv;charset=utf-8' }), a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 3000);
+      $('csvMsg').textContent = 'Download richiesto: ' + name + '. Se non parte, usa «Copia CSV».';
+    } catch (e) { $('csvMsg').textContent = 'Download non riuscito: usa «Copia CSV».'; }
+  });
+  $('copyBtn').addEventListener('click', function () {
+    var sess = sessions[viewIdx]; if (!sess) return; var txt = csvFor(sess);
+    function fb() { $('csvMsg').textContent = 'Copia non riuscita. Scarica il CSV oppure riprova.'; }
+    try { navigator.clipboard.writeText(txt).then(function () { $('csvMsg').textContent = 'CSV copiato. Incollalo nella conversazione o in un foglio di calcolo.'; }, fb); } catch (e) { fb(); }
+  });
+  var delArmed = 0;
+  $('delBtn').addEventListener('click', function () {
+    if (!delArmed) { delArmed = 1; $('delBtn').textContent = 'Conferma: cancella tutto'; setTimeout(function () { delArmed = 0; $('delBtn').textContent = 'Cancella registro'; }, 4000); return; }
+    delArmed = 0; $('delBtn').textContent = 'Cancella registro';
+    sessions = logging && S ? [S] : []; viewIdx = sessions.length - 1; persistLog(); renderLog(); $('csvMsg').textContent = 'Registro cancellato.';
+  });
+
+  /* ---------- Comandi ---------- */
+  $('go').addEventListener('click', async function () {
+    if (audioRunning) { stopAudio(); return; }
+    if (P.useSens) { var ok = await enableSensors(); if (ok && !logging) logStart(); }
+    await startAudio();
+  });
+  $('logBtn').addEventListener('click', async function () {
+    if (logging) { logStop(); return; }
+    var ok = await enableSensors();
+    if (!ok) return;
+    P.useSens = true; persist(); refresh(); logStart();
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && (audioRunning || logging)) { if (ctx && ctx.state === 'suspended') ctx.resume(); lock(); if (audioRunning) raf = requestAnimationFrame(frame); }
+  });
+  var hintT = 0;
+  $('blackBtn').addEventListener('click', function () {
+    $('dark').hidden = false; $('darkHint').style.opacity = 1; clearTimeout(hintT);
+    hintT = setTimeout(function () { $('darkHint').style.opacity = 0; }, 4000);
+    if (audioRunning || logging) lock();
+    try { if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function () {}); } catch (e) {}
+  });
+  $('dark').addEventListener('click', function () {
+    $('dark').hidden = true;
+    try { if (document.fullscreenElement) document.exitFullscreen().catch(function () {}); } catch (e) {}
+  });
+  $('resetBtn').addEventListener('click', function () {
+    for (var k in DEFAULTS) P[k] = DEFAULTS[k];
+    refresh(); persist(); ['vol', 'noise', 'tone', 'dur'].forEach(onChange);
+  });
+
+  refresh(); updateButtons(); renderLog();
+  window.__resp = { tr: tr, uGuide: uGuide, sync: sync, get cycles() { return cycles; }, get S() { return S; }, get sessions() { return sessions; }, P: P };
+})();
+</script>
+</body>
+</html>
